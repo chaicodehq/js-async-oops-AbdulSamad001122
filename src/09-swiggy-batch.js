@@ -88,25 +88,68 @@
  *   //     { status: "rejected", reason: "Item name required!" }]
  */
 export function prepareOrder(item, prepTime) {
-  // Your code here
+  return new Promise((resolve, reject) => {
+    if (!item) {
+      return reject(new Error("Item name required!"));
+    }
+    if (typeof prepTime !== "number" || prepTime <= 0 || isNaN(prepTime)) {
+      return reject(new Error("Invalid prep time!"));
+    }
+    setTimeout(() => {
+      resolve({ item, ready: true, prepTime });
+    }, prepTime);
+  });
 }
 
 export function prepareBatch(items) {
-  // Your code here
+  if (!items || items.length === 0) return Promise.resolve([]);
+  const promises = items.map(i => prepareOrder(i.name, i.prepTime));
+  return Promise.all(promises);
 }
 
 export function getFirstReady(items) {
-  // Your code here
+  if (!items || items.length === 0) return Promise.reject(new Error("No items to prepare!"));
+  const promises = items.map(i => prepareOrder(i.name, i.prepTime));
+  return Promise.race(promises);
 }
 
 export function prepareSafeBatch(items) {
-  // Your code here
+  if (!items || items.length === 0) return Promise.resolve([]);
+  const promises = items.map(i => prepareOrder(i.name, i.prepTime));
+  return Promise.allSettled(promises).then(results => 
+    results.map(r => r.status === "rejected" ? { status: "rejected", reason: r.reason.message } : r)
+  );
 }
 
 export function deliverWithTimeout(orderPromise, timeoutMs) {
-  // Your code here
+  if (typeof timeoutMs !== "number" || timeoutMs <= 0 || isNaN(timeoutMs)) {
+    return Promise.reject(new Error("Invalid timeout!"));
+  }
+  let timerId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timerId = setTimeout(() => {
+      reject(new Error("Delivery timeout!"));
+    }, timeoutMs);
+  });
+  return Promise.race([orderPromise, timeoutPromise]).finally(() => clearTimeout(timerId));
 }
 
-export function batchWithRetry(items, maxRetries) {
-  // Your code here
+export async function batchWithRetry(items, maxRetries) {
+  if (typeof maxRetries !== "number" || maxRetries < 0) {
+    maxRetries = 0;
+  }
+  
+  let attempts = 0;
+  let lastError;
+  
+  while (attempts <= maxRetries) {
+    try {
+      const result = await prepareBatch(items);
+      return result;
+    } catch (error) {
+      lastError = error;
+      attempts++;
+    }
+  }
+  throw lastError;
 }
